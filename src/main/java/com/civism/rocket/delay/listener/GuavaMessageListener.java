@@ -31,6 +31,9 @@ public class GuavaMessageListener implements MessageListenerConcurrently {
         this.delayMqProducer = delayMqProducer;
     }
 
+    /**
+     * 监听代理topic的consumer
+     */
     @Override
     public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
         try {
@@ -63,6 +66,7 @@ public class GuavaMessageListener implements MessageListenerConcurrently {
                     message.putUserProperty(GuavaRocketConstants.GUAVA_ORIGINAL_UUID, uuid);
                 }
                 message.setBody(messageExt.getBody());
+                // times已经是上一次被减去的时间了，这次将该时间作为参数，继续进行下一次发送
                 delayMqProducer.sendDelay(message, new Date(Long.valueOf(times) * 1000L));
                 return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
             }

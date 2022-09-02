@@ -49,19 +49,23 @@ public class DelayMqProducer extends DefaultMQProducer {
         if (startSendTime == null) {
             return super.send(msg);
         }
+        // 计算需要延迟多久
         long l = Duration.between(Instant.now(), startSendTime.toInstant()).getSeconds();
-        //如果不等于0,说明设置了延时等级，直接用rocketMQ支持的发送
+        // 1、如果延迟<60，直接放到时间轮中执行任务
         if (l <= GuavaRocketConstants.TIME_OUT) {
             HashedWheelTimer instance = TimeWheelFactory.getInstance();
             CountDownLatch countDownLatch = new CountDownLatch(1);
+            // new 了一个任务，就是一个普通的任务
             SendRealMqTask sendRealMqTask = new SendRealMqTask();
             sendRealMqTask.setDelayMqProducer(this);
             sendRealMqTask.setMessage(msg);
             sendRealMqTask.setCountDownLatch(countDownLatch);
+            // 将任务放到时间轮中，延迟执行
             instance.newTimeout(sendRealMqTask, l < 0 ? 1 : l, TimeUnit.SECONDS);
-            countDownLatch.await();
+            countDownLatch.await(); // 阻塞
             return sendRealMqTask.getResult();
         } else {
+            // 2、根据延迟时间计算出一个大于该时间的index
             Integer level = DelayLevelCalculate.calculateDefault(l);
             fillMessage(msg, level, startSendTime);
             return super.send(msg);
@@ -98,6 +102,7 @@ public class DelayMqProducer extends DefaultMQProducer {
      * @param startSendTime 发送时间
      */
     private void fillMessage(Message msg, Integer level, Date startSendTime) {
+        // 这里计算出被rocket的某个固定延迟减去后，还剩下多少时间
         msg.putUserProperty(GuavaRocketConstants.GUAVA_TIMES, String.valueOf(startSendTime.getTime() / 1000 - DelayLevelCalculate.get(level - 1)));
 
         String topic = msg.getProperty(GuavaRocketConstants.GUAVA_ORIGINAL_TOPIC);
@@ -122,7 +127,9 @@ public class DelayMqProducer extends DefaultMQProducer {
         if (StringUtils.isBlank(property)) {
             msg.putUserProperty(GuavaRocketConstants.GUAVA_ORIGINAL_UUID, uuid);
         }
+        // todo 个人认为这里应该是level-1吧，而不是level
         msg.setDelayTimeLevel(level);
+        // 将消息发送给代理topic
         msg.setTopic(GuavaRocketConstants.PROXY_TOPIC);
         log.info("消息uuid {} 开发发送时间为{},延时等级本次建议为{}", uuid, String.format("%tF %<tT", new Date()), level);
     }

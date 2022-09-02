@@ -37,6 +37,7 @@ public class DelayLevelCalculate {
         defaultLevel.add(7200);
     }
 
+    // 当传入1700，返回的是 1800的索引
     public static Integer calculateDefault(long second) {
         Integer level = null;
         for (int i = defaultLevel.size() - 1; i >= 0; i--) {
